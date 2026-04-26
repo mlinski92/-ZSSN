@@ -11,7 +11,7 @@ selected_model = "gemini-2.5-flash"
 
 with st.sidebar:
     st.header("Dodatki")
-    uploaded_file = st.file_uploader("Wgraj plik tekstowy", type=['txt', 'py', 'md', 'json'])
+    uploaded_file = st.file_uploader("Wgraj plik tekstowy", type=['txt', 'py', 'md', 'json', 'pdf'])
     
     if uploaded_file is not None:
         # Odczyt treści pliku
