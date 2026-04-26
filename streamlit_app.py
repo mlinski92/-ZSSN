@@ -2,6 +2,7 @@ import streamlit as st
 from openai import OpenAI
 import os
 from pypdf import PdfReader
+pip install pypdf
 
 st.set_page_config(layout="wide", page_title="Gemini chatbot app")
 st.title("Gemini chatbot app")
