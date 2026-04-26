@@ -11,15 +11,31 @@ selected_model = "gemini-2.5-flash"
 
 with st.sidebar:
     st.header("Dodatki")
-    uploaded_file = st.file_uploader("Wgraj plik tekstowy", type=['txt', 'py', 'md', 'json'])
+    # Dodano 'pdf' do dozwolonych typów
+    uploaded_file = st.file_uploader("Wgraj plik", type=['txt', 'py', 'md', 'json', 'pdf'])
+    
+    extracted_content = ""
     
     if uploaded_file is not None:
-        # Odczyt treści pliku
-        stringio = uploaded_file.getvalue().decode("utf-8")
-        st.success("Plik wgrany pomyślnie!")
-        # Opcjonalnie: podgląd pliku w sidebarze
-        with st.expander("Podgląd pliku"):
-            st.text(stringio)
+        file_extension = uploaded_file.name.split('.')[-1].lower()
+        
+        try:
+            if file_extension == 'pdf':
+                # Logika dla PDF
+                pdf_reader = PdfReader(uploaded_file)
+                for page in pdf_reader.pages:
+                    extracted_content += page.extract_text() + "\n"
+                st.success("Tekst z PDF został wyodrębniony!")
+            else:
+                # Logika dla plików tekstowych
+                extracted_content = uploaded_file.getvalue().decode("utf-8")
+                st.success("Plik tekstowy wczytany!")
+            
+            with st.expander("Podgląd treści"):
+                st.text(extracted_content[:1000] + "..." if len(extracted_content) > 1000 else extracted_content)
+        
+        except Exception as e:
+            st.error(f"Błąd podczas odczytu pliku: {e}")
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = [{"role": "assistant", "content": "Cześć! W czym mogę Ci dzisiaj pomóc?"}]
@@ -34,17 +50,16 @@ if prompt := st.chat_input():
 
     client = OpenAI(api_key=api_key, base_url=base_url)
     
-    # Jeśli plik jest wgrany, doklejamy jego treść do zapytania użytkownika
+    # Budowanie promptu z kontekstem
     full_prompt = prompt
-    if uploaded_file is not None:
-        full_prompt = f"Kontekst z pliku '{uploaded_file.name}':\n\n{stringio}\n\nPytanie użytkownika: {prompt}"
+    if extracted_content:
+        full_prompt = f"Oto treść wgranego pliku:\n{extracted_content}\n\nUżyj powyższego kontekstu, aby odpowiedzieć na pytanie: {prompt}"
 
-    # Dodajemy do historii tylko czyste pytanie użytkownika (żeby nie zaśmiecać widoku)
+    # Wyświetlamy tylko czyste pytanie użytkownika
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
 
-    # Do API wysyłamy jednak pełny komunikat (z kontekstem pliku)
-    # Tworzymy tymczasową listę wiadomości dla API
+    # Do API wysyłamy zmodyfikowany komunikat (z historią)
     api_messages = st.session_state.messages[:-1] + [{"role": "user", "content": full_prompt}]
 
     try:
@@ -57,4 +72,4 @@ if prompt := st.chat_input():
         st.session_state.messages.append({"role": "assistant", "content": msg})
         st.chat_message("assistant").write(msg)
     except Exception as e:
-        st.error(f"Błąd: {e}")
+        st.error(f"Błąd API: {e}")
