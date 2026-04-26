@@ -6,7 +6,7 @@ st.set_page_config(layout="wide", page_title="Gemini chatbot app")
 st.title("Gemini chatbot app")
 
 # api_key, base_url = st.secrets["API_KEY"], st.secrets["BASE_URL"]
-api_key, base_url = os.getenv("GEMINI_API_KEY")
+api_key, base_url = os.getenv("API_KEY")
 selected_model = "gemini-2.5-flash"
 
 if "messages" not in st.session_state:
