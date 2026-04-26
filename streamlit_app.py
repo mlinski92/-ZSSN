@@ -1,8 +1,7 @@
 import streamlit as st
 from openai import OpenAI
-import os
 from pypdf import PdfReader
-pip install pypdf
+import os
 
 st.set_page_config(layout="wide", page_title="Gemini chatbot app")
 st.title("Gemini chatbot app")
@@ -13,65 +12,81 @@ selected_model = "gemini-2.5-flash"
 
 with st.sidebar:
     st.header("Dodatki")
-    # Dodano 'pdf' do dozwolonych typów
-    uploaded_file = st.file_uploader("Wgraj plik", type=['txt', 'py', 'md', 'json', 'pdf'])
+    uploaded_file = st.file_uploader(
+        "Wgraj plik tekstowy lub PDF", 
+        type=['txt', 'py', 'md', 'json', 'pdf']
+    )
     
-    extracted_content = ""
+    file_context = ""
     
     if uploaded_file is not None:
-        file_extension = uploaded_file.name.split('.')[-1].lower()
-        
         try:
-            if file_extension == 'pdf':
-                # Logika dla PDF
+            # Rozpoznawanie typu pliku
+            if uploaded_file.name.lower().endswith('.pdf'):
+                # Odczyt PDF
                 pdf_reader = PdfReader(uploaded_file)
                 for page in pdf_reader.pages:
-                    extracted_content += page.extract_text() + "\n"
-                st.success("Tekst z PDF został wyodrębniony!")
+                    text = page.extract_text()
+                    if text:
+                        file_context += text + "\n"
+                st.success(f"PDF '{uploaded_file.name}' wczytany!")
             else:
-                # Logika dla plików tekstowych
-                extracted_content = uploaded_file.getvalue().decode("utf-8")
-                st.success("Plik tekstowy wczytany!")
+                # Odczyt plików tekstowych
+                file_context = uploaded_file.getvalue().decode("utf-8")
+                st.success(f"Plik tekstowy '{uploaded_file.name}' wczytany!")
             
-            with st.expander("Podgląd treści"):
-                st.text(extracted_content[:1000] + "..." if len(extracted_content) > 1000 else extracted_content)
+            # Podgląd fragmentu treści
+            with st.expander("Podgląd treści pliku"):
+                st.text(file_context[:1000] + ("..." if len(file_context) > 1000 else ""))
         
         except Exception as e:
             st.error(f"Błąd podczas odczytu pliku: {e}")
 
-if "messages" not in st.session_state:
-    st.session_state["messages"] = [{"role": "assistant", "content": "Cześć! W czym mogę Ci dzisiaj pomóc?"}]
+# --- LOGIKA CZATU ---
 
+# Inicjalizacja historii wiadomości
+if "messages" not in st.session_state:
+    st.session_state["messages"] = [{"role": "assistant", "content": "Cześć! Wgraj plik lub zadaj mi pytanie."}]
+
+# Wyświetlanie historii czatu na ekranie
 for msg in st.session_state.messages:
     st.chat_message(msg["role"]).write(msg["content"])
 
+# Reakcja na wpisanie wiadomości przez użytkownika
 if prompt := st.chat_input():
-    if not api_key:
-        st.info("Brak klucza API.")
-        st.stop()
-
+    # Inicjalizacja klienta OpenAI (kompatybilnego z Gemini)
     client = OpenAI(api_key=api_key, base_url=base_url)
     
-    # Budowanie promptu z kontekstem
-    full_prompt = prompt
-    if extracted_content:
-        full_prompt = f"Oto treść wgranego pliku:\n{extracted_content}\n\nUżyj powyższego kontekstu, aby odpowiedzieć na pytanie: {prompt}"
-
-    # Wyświetlamy tylko czyste pytanie użytkownika
+    # Wyświetlamy samo pytanie użytkownika w oknie czatu
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
 
-    # Do API wysyłamy zmodyfikowany komunikat (z historią)
-    api_messages = st.session_state.messages[:-1] + [{"role": "user", "content": full_prompt}]
-
-    try:
-        response = client.chat.completions.create(
-            model=selected_model,
-            messages=api_messages
+    # Przygotowanie promptu dla modelu (z kontekstem z pliku, jeśli istnieje)
+    if file_context:
+        full_prompt_with_context = (
+            f"Poniżej znajduje się treść wgranego pliku:\n"
+            f"--- POCZĄTEK PLIKU ---\n{file_context}\n--- KONIEC PLIKU ---\n\n"
+            f"Na podstawie powyższych danych odpowiedz na pytanie: {prompt}"
         )
+    else:
+        full_prompt_with_context = prompt
+
+    # Tworzymy listę wiadomości do wysłania do API (podmieniamy ostatnią wiadomość na taką z kontekstem)
+    api_messages = st.session_state.messages[:-1] + [{"role": "user", "content": full_prompt_with_context}]
+
+    # Wywołanie API
+    try:
+        with st.spinner("Gemini myśli..."):
+            response = client.chat.completions.create(
+                model=selected_model,
+                messages=api_messages
+            )
 
         msg = response.choices[0].message.content
+        
+        # Zapisujemy i wyświetlamy odpowiedź asystenta
         st.session_state.messages.append({"role": "assistant", "content": msg})
         st.chat_message("assistant").write(msg)
+        
     except Exception as e:
-        st.error(f"Błąd API: {e}")
+        st.error(f"Wystąpił błąd podczas komunikacji z API: {e}")
