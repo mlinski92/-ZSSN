@@ -13,19 +13,19 @@ UPLOAD_FOLDER = "data/uploaded_pdfs"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 template = """
-...
+Jesteś pomocnym asystentem. Odpowiedz na pytanie na podstawie dostarczonego kontekstu. Jeśli odpowiedź nie jest w kontekście, powiedz, że nie wiesz.
 Question: {question} 
 Context: {context} 
 Answer:
 """
 
-selected_model = "gemini-2.5-flash" # nazwa modelu
-model = CustomModelChat(model_name=selected_model) # obiekt wrappera modelu
+selected_model = "gemini-2.5-flash"
+model = ChatOpenRouter(model_name=selected_model)  # poprawiona nazwa klasy
 
 def answer_question(question, documents, model):
     context = "\n\n".join([doc["text"] for doc in documents])
-    prompt = ChatPromptTemplate.from_template(template) # prompt template'owy
-    chain = prompt | model # chain wywołania odpowiedzi
+    prompt = ChatPromptTemplate.from_template(template)
+    chain = prompt | model
     return chain.invoke({"question": question, "context": context})
 
 if "query" not in st.session_state:
@@ -39,7 +39,9 @@ if "retrieve_files" not in st.session_state:
 if "faiss_index" not in st.session_state:
     st.session_state.faiss_index = None
 
-uploaded_files = st.sidebar.file_uploader("Ładuj PDF(y)", type=["pdf"], accept_multiple_files=True, key="file_uploader")
+uploaded_files = st.sidebar.file_uploader(
+    "Ładuj PDF(y)", type=["pdf"], accept_multiple_files=True, key="file_uploader"
+)
 
 if st.sidebar.button("Usuń pliki"):
     shutil.rmtree(UPLOAD_FOLDER)
@@ -60,8 +62,13 @@ if uploaded_files:
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
     st.write("Pliki załadowane")
-    documents = ... # załadowanie dokumentów
-    st.session_state.faiss_index = ... # dodanie stanu bazy do sesji
+
+    # 1. Załadowanie dokumentów z folderu
+    documents = load_documents_from_folder(UPLOAD_FOLDER)
+
+    # 2. Zbudowanie indeksu FAISS i zapis w sesji
+    st.session_state.faiss_index = create_index(documents)
+
     st.write("Pliki przeliczone")
     st.session_state.retrieve_files = True
 
@@ -76,10 +83,16 @@ for msg in st.session_state.messages:
 if question := st.chat_input():
     st.session_state.messages.append({"role": "user", "content": question})
     st.chat_message("user").write(question)
+
     if st.session_state.retrieve_files:
-        related_documents = ... # wyszukanie najbardziej pasujących do query dokumentów
-        answer = ... # wywołanie odpowiedzi na pytanie z dodanymi do kontekstu dokumentami
+        # 3. Wyszukanie najlepiej pasujących chunków do pytania
+        related_documents = retrieve_docs(st.session_state.faiss_index, question, k=3)
+
+        # 4. Wywołanie modelu z kontekstem z dokumentów
+        answer = answer_question(question, related_documents, model)
     else:
-        answer = ...
+        # Odpowiedź bez kontekstu, gdy nie ma wgranych plików
+        answer = model.invoke(question)
+
     st.session_state.messages.append({"role": "assistant", "content": answer.content})
     st.chat_message("assistant").write(answer.content)
