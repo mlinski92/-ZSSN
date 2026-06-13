@@ -19,8 +19,8 @@ Context: {context}
 Answer:
 """
 
-selected_model = ... # nazwa modelu
-model = ... # obiekt wrappera modelu
+selected_model = "gemini-2.5-flash" # nazwa modelu
+model = CustomModelChat(model_name=selected_model) # obiekt wrappera modelu
 
 def answer_question(question, documents, model):
     context = "\n\n".join([doc["text"] for doc in documents])
