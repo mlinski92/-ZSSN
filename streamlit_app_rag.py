@@ -86,7 +86,7 @@ if question := st.chat_input():
 
     if st.session_state.retrieve_files:
         # 3. Wyszukanie najlepiej pasujących chunków do pytania
-        related_documents = retrieve_docs(st.session_state.faiss_index, question, k=3)
+        related_documents = retrieve_docs(question, st.session_state.faiss_index, k=3
 
         # 4. Wywołanie modelu z kontekstem z dokumentów
         answer = answer_question(question, related_documents, model)
